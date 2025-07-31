@@ -1,239 +1,170 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Root Domain Checker</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.development.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/tldts@5.7.5/dist/index.umd.min.js"></script>
-  </head>
-  <body class="bg-gray-50">
-    <div id="app" class="p-6 max-w-7xl mx-auto"></div>
+<head>
+  <meta charset="UTF-8" />
+  <title>Backlink Domain Checker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tldts@5.7.5/dist/index.umd.min.js"></script>
+</head>
+<body class="bg-gray-100 text-gray-800">
+  <div id="app" class="p-6 max-w-7xl mx-auto"></div>
+  <script type="text/babel">
+    const { useState } = React;
 
-    <script type="text/babel">
-      const { useState } = React;
+    const App = () => {
+      const [manualData, setManualData] = useState([Array(6).fill("")]);
+      const [results, setResults] = useState([]);
+      const [filterType, setFilterType] = useState("common");
+      const [minCount, setMinCount] = useState(2);
 
-      const defaultColumns = ["Column1", "Column2", "Column3", "Column4"];
+      const extractDomain = (url) => {
+        try {
+          const res = tldts.parse(url);
+          return res.domain ? `${res.domain}.${res.publicSuffix}` : null;
+        } catch {
+          return null;
+        }
+      };
 
-      const App = () => {
-        const [data, setData] = useState([]);
-        const [columns, setColumns] = useState(defaultColumns);
-        const [manualTable, setManualTable] = useState(
-          Array(5).fill(Array(defaultColumns.length).fill(""))
-        );
-        const [filterCount, setFilterCount] = useState(2);
-        const [excludeBoarding, setExcludeBoarding] = useState(true);
-        const [results, setResults] = useState([]);
+      const handleInput = (rIdx, cIdx, val) => {
+        const newData = [...manualData];
+        newData[rIdx][cIdx] = val;
+        if (rIdx === manualData.length - 1) newData.push(Array(newData[0].length).fill(""));
+        setManualData(newData);
+      };
 
-        const extractRootDomain = (url) => {
-          try {
-            const res = tldts.parse(url);
-            return res.domain ? `${res.domain}.${res.publicSuffix}` : null;
-          } catch {
-            return null;
-          }
-        };
-
-        const process = () => {
-          const rows = data.length ? data : manualTable;
-          const domainMap = {};
-
-          rows.forEach((row) => {
-            columns.forEach((col, i) => {
-              const url = row[i] || "";
-              const domain = extractRootDomain(url);
-              if (domain) {
-                if (!domainMap[domain]) {
-                  domainMap[domain] = { appearsIn: new Set(), urls: [] };
-                }
-                domainMap[domain].appearsIn.add(col);
-                domainMap[domain].urls.push(url);
-              }
-            });
+      const process = () => {
+        const domainMap = {};
+        manualData.slice(0, -1).forEach((row) => {
+          row.forEach((url, i) => {
+            if (!url) return;
+            const domain = extractDomain(url);
+            if (!domain) return;
+            if (!domainMap[domain]) domainMap[domain] = { appearsIn: new Set(), urls: [] };
+            domainMap[domain].appearsIn.add(`Website ${i + 1}`);
+            domainMap[domain].urls.push(url);
           });
+        });
 
-          const filtered = Object.entries(domainMap)
-            .filter(([_, v]) => v.appearsIn.size >= filterCount)
-            .filter(([_, v]) =>
-              excludeBoarding ? !v.appearsIn.has("B0arding") : true
-            )
-            .map(([domain, v]) => ({
-              domain,
-              appearsIn: [...v.appearsIn].join(", "),
-              urls: v.urls.join(" | "),
-              count: v.appearsIn.size,
-            }))
-            .sort((a, b) => b.count - a.count);
+        const filterFn = {
+          "common": ([_, v]) => v.appearsIn.size >= minCount,
+          "unique": ([_, v]) => v.appearsIn.size === 1,
+          "non-matching": ([_, v]) => !v.appearsIn.has(`Website 1`) && v.appearsIn.size >= 1
+        }[filterType];
 
-          setResults(filtered);
-        };
+        const filtered = Object.entries(domainMap)
+          .filter(filterFn)
+          .map(([domain, v]) => ({
+            domain,
+            appearsIn: Array.from(v.appearsIn).join(", "),
+            urls: v.urls.join(" | "),
+            count: v.appearsIn.size
+          }))
+          .sort((a, b) => b.count - a.count);
 
-        const handleCSVUpload = (e) => {
-          const file = e.target.files[0];
-          if (file) {
-            Papa.parse(file, {
-              complete: (res) => {
-                const parsed = res.data.filter((row) => row.length > 0);
-                setData(parsed.slice(1)); // remove header
-                setColumns(parsed[0]);
-              },
-            });
-          }
-        };
+        setResults(filtered);
+      };
 
-        const updateManual = (rowIdx, colIdx, val) => {
-          const newTable = [...manualTable];
-          newTable[rowIdx][colIdx] = val;
-          setManualTable(newTable);
-        };
+      return (
+        <div className="space-y-8">
+          <header className="text-center">
+            <h1 className="text-4xl font-bold">🔎 Backlink Domain Checker</h1>
+            <p className="text-sm text-gray-600 mt-2">Paste your backlink data into the endless table below</p>
+          </header>
 
-        const exportCSV = () => {
-          const csv = [
-            ["Root Domain", "Appears In", "URLs"],
-            ...results.map((r) => [r.domain, r.appearsIn, r.urls]),
-          ]
-            .map((row) => row.map((v) => `"${v}"`).join(","))
-            .join("\n");
+          <div className="overflow-auto">
+            <table className="table-auto border-collapse w-full">
+              <thead>
+                <tr>
+                  {manualData[0].map((_, idx) => (
+                    <th key={idx} className="border px-2 py-1 bg-gray-200 text-sm">Website {idx + 1}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {manualData.map((row, rowIdx) => (
+                  <tr key={rowIdx}>
+                    {row.map((cell, colIdx) => (
+                      <td key={colIdx} className="border px-1">
+                        <input
+                          className="w-full px-1 py-1 text-sm border"
+                          value={cell}
+                          onChange={(e) => handleInput(rowIdx, colIdx, e.target.value)}
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-          const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement("a");
-          link.setAttribute("href", url);
-          link.setAttribute("download", "common_domains.csv");
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-        };
+          <div className="flex flex-col md:flex-row gap-4 items-start">
+            <label className="block">
+              Filter Type:
+              <select
+                className="ml-2 border px-2 py-1"
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+              >
+                <option value="common">Similar Domains on Multiple Brands</option>
+                <option value="unique">Unsimilar Domains (Only One Brand)</option>
+                <option value="non-matching">Unsimilar from Website 1</option>
+              </select>
+            </label>
 
-        return (
-          <div>
-            <h1 className="text-3xl font-bold mb-4">🌐 Common Domain Checker</h1>
+            <label className="block">
+              Min Appearance:
+              <input
+                type="number"
+                className="ml-2 border px-2 py-1 w-20"
+                value={minCount}
+                onChange={(e) => setMinCount(Number(e.target.value))}
+              />
+            </label>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="p-4 bg-white rounded shadow">
-                <h2 className="text-lg font-semibold mb-2">1️⃣ Upload CSV</h2>
-                <input
-                  type="file"
-                  accept=".csv"
-                  onChange={handleCSVUpload}
-                  className="block border p-2 w-full"
-                />
-              </div>
+            <button
+              onClick={process}
+              className="bg-blue-600 text-white px-4 py-2 rounded"
+            >
+              Run Filter
+            </button>
+          </div>
 
-              <div className="p-4 bg-white rounded shadow">
-                <h2 className="text-lg font-semibold mb-2">2️⃣ Manual Table Input</h2>
-                <table className="table-auto w-full border text-sm">
+          {results.length > 0 && (
+            <div className="bg-white p-4 rounded shadow">
+              <h2 className="text-xl font-semibold mb-4">✅ Results</h2>
+              <div className="overflow-auto">
+                <table className="table-auto w-full text-sm border">
                   <thead>
-                    <tr>
-                      {columns.map((col, i) => (
-                        <th key={i} className="border px-2 py-1">
-                          <input
-                            value={col}
-                            onChange={(e) => {
-                              const newCols = [...columns];
-                              newCols[i] = e.target.value;
-                              setColumns(newCols);
-                            }}
-                            className="w-full border px-1"
-                          />
-                        </th>
-                      ))}
+                    <tr className="bg-gray-100">
+                      <th className="border px-2 py-1">Root Domain</th>
+                      <th className="border px-2 py-1">Appears In</th>
+                      <th className="border px-2 py-1">Actual URLs</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {manualTable.map((row, rowIdx) => (
-                      <tr key={rowIdx}>
-                        {row.map((cell, colIdx) => (
-                          <td key={colIdx} className="border px-2 py-1">
-                            <input
-                              value={cell}
-                              onChange={(e) =>
-                                updateManual(rowIdx, colIdx, e.target.value)
-                              }
-                              className="w-full px-1"
-                            />
-                          </td>
-                        ))}
+                    {results.map((r, i) => (
+                      <tr key={i}>
+                        <td className="border px-2 py-1">{r.domain}</td>
+                        <td className="border px-2 py-1">{r.appearsIn}</td>
+                        <td className="border px-2 py-1">{r.urls}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             </div>
+          )}
+        </div>
+      );
+    };
 
-            <div className="mt-6 p-4 bg-white rounded shadow">
-              <h2 className="text-lg font-semibold mb-2">🔍 Filter Options</h2>
-              <div className="flex flex-col md:flex-row gap-4 items-start">
-                <label>
-                  Minimum # of appearances:
-                  <input
-                    type="number"
-                    value={filterCount}
-                    onChange={(e) => setFilterCount(Number(e.target.value))}
-                    className="border px-2 py-1 ml-2 w-20"
-                  />
-                </label>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={excludeBoarding}
-                    onChange={() => setExcludeBoarding(!excludeBoarding)}
-                    className="mr-2"
-                  />
-                  Exclude “B0arding”
-                </label>
-                <button
-                  onClick={process}
-                  className="bg-blue-600 text-white px-4 py-2 rounded"
-                >
-                  Process
-                </button>
-              </div>
-            </div>
-
-            {results.length > 0 && (
-              <div className="mt-6 bg-white p-4 rounded shadow">
-                <div className="flex justify-between items-center">
-                  <h2 className="text-xl font-semibold">
-                    ✅ Results: {results.length} domains
-                  </h2>
-                  <button
-                    onClick={exportCSV}
-                    className="bg-green-600 text-white px-4 py-2 rounded"
-                  >
-                    Download CSV
-                  </button>
-                </div>
-                <div className="overflow-auto mt-4">
-                  <table className="table-auto w-full text-sm border">
-                    <thead>
-                      <tr className="bg-gray-100">
-                        <th className="border px-2 py-1">Root Domain</th>
-                        <th className="border px-2 py-1">Appears In</th>
-                        <th className="border px-2 py-1">Actual URLs</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {results.map((r, i) => (
-                        <tr key={i}>
-                          <td className="border px-2 py-1">{r.domain}</td>
-                          <td className="border px-2 py-1">{r.appearsIn}</td>
-                          <td className="border px-2 py-1">{r.urls}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      };
-
-      ReactDOM.createRoot(document.getElementById("app")).render(<App />);
-    </script>
-  </body>
+    ReactDOM.createRoot(document.getElementById("app")).render(<App />);
+  </script>
+</body>
 </html>
