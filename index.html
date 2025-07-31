@@ -1,171 +1,221 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Backlink Domain Comparator</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.development.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/tldts@5.7.5/dist/index.umd.min.js"></script>
-  </head>
-  <body class="bg-blue-50 text-gray-900">
-    <div id="app" class="p-6 max-w-7xl mx-auto"></div>
+<head>
+  <meta charset="UTF-8">
+  <title>Backlink Comparison Tool</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f8faff;
+      margin: 0;
+      padding: 0;
+    }
 
-    <script type="text/babel">
-      const { useState } = React;
-      const { parse } = tldts;
+    header {
+      background-color: #004c99;
+      color: white;
+      padding: 15px 30px;
+      text-align: center;
+      font-size: 24px;
+    }
 
-      function App() {
-        const [csvData, setCsvData] = useState([]);
-        const [pastedData, setPastedData] = useState("");
-        const [results, setResults] = useState([]);
-        const [filterType, setFilterType] = useState("similar");
+    .container {
+      padding: 30px;
+      max-width: 1200px;
+      margin: auto;
+    }
 
-        const extractDomain = (url) => {
-          try {
-            const res = parse(url);
-            return res.domain ? `${res.domain}.${res.publicSuffix}` : null;
-          } catch {
-            return null;
-          }
-        };
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 30px;
+    }
 
-        const handleCSVUpload = (e) => {
-          const files = Array.from(e.target.files);
-          const promises = files.map(file => 
-            new Promise((resolve, reject) => {
-              Papa.parse(file, {
-                complete: (res) => {
-                  const data = res.data.map(row => row[0]).filter(Boolean);
-                  resolve(data);
-                },
-                error: reject
-              });
-            })
-          );
+    th, td {
+      border: 1px solid #ccc;
+      padding: 10px;
+      vertical-align: top;
+    }
 
-          Promise.all(promises).then(setCsvData);
-        };
+    th {
+      background-color: #e6f0ff;
+    }
 
-        const processData = () => {
-          const pastedMatrix = [];
-          if (pastedData.trim()) {
-            const lines = pastedData.trim().split("\n");
-            lines.forEach(line => {
-              const values = line.split(/\t|,/).map(v => v.trim()).filter(Boolean);
-              values.forEach((val, idx) => {
-                if (!pastedMatrix[idx]) pastedMatrix[idx] = [];
-                pastedMatrix[idx].push(val);
-              });
-            });
-          }
+    textarea {
+      width: 100%;
+      height: 150px;
+      resize: vertical;
+    }
 
-          const allData = [...csvData, ...pastedMatrix];
-          const domainSets = allData.map(group => 
-            new Set(group.map(extractDomain).filter(Boolean))
-          );
+    .filters {
+      margin-bottom: 20px;
+    }
 
-          const allDomains = [...new Set(domainSets.flatMap(set => Array.from(set)))];
+    .filters label {
+      margin-right: 20px;
+    }
 
-          let filtered = [];
+    button {
+      background-color: #0073e6;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      cursor: pointer;
+      border-radius: 5px;
+    }
 
-          if (filterType === "similar") {
-            filtered = allDomains.filter(domain => domainSets.every(set => set.has(domain)));
-          } else if (filterType === "unsimilar") {
-            filtered = allDomains.filter(domain => domainSets.filter(set => set.has(domain)).length === 1);
-          } else if (filterType === "unsimilar_from_one") {
-            filtered = allDomains.filter(domain => 
-              domainSets.some(set => set.has(domain)) &&
-              domainSets.filter(set => set.has(domain)).length === 1
-            );
-          }
+    button:hover {
+      background-color: #005bb5;
+    }
 
-          setResults(filtered.map(domain => ({
-            domain,
-            presence: domainSets.map(set => set.has(domain))
-          })));
-        };
+    footer {
+      background-color: #004c99;
+      color: white;
+      text-align: center;
+      padding: 10px;
+    }
 
-        return (
-          <div className="space-y-8">
-            <header className="text-center">
-              <h1 className="text-3xl font-bold text-blue-900">🔗 Backlink Domain Comparator</h1>
-              <p className="text-sm text-blue-700 mt-2">
-                Upload multiple CSV files or paste backlink data. Filter and compare domains across sites.
-              </p>
-            </header>
+    .result-table {
+      margin-top: 30px;
+    }
 
-            <div className="bg-white p-4 rounded shadow space-y-4">
-              <div>
-                <label className="font-semibold text-blue-800 block mb-1">📁 Upload CSV files:</label>
-                <input type="file" accept=".csv" multiple onChange={handleCSVUpload} className="block w-full border rounded px-3 py-2" />
-              </div>
+    .result-table table {
+      border: 1px solid #ccc;
+    }
 
-              <div>
-                <label className="font-semibold text-blue-800 block mb-1">📋 Or paste backlink sheet (tabular):</label>
-                <textarea rows="5" value={pastedData} onChange={(e) => setPastedData(e.target.value)} className="w-full border rounded px-3 py-2" placeholder="Paste columns from Excel or Sheets..."></textarea>
-              </div>
+    .result-table th {
+      background: #d9eaff;
+    }
 
-              <div className="flex flex-wrap items-center gap-4">
-                <label className="font-medium text-blue-900">Filter:</label>
-                <select
-                  className="border rounded px-3 py-1"
-                  value={filterType}
-                  onChange={(e) => setFilterType(e.target.value)}
-                >
-                  <option value="similar">Similar Across All</option>
-                  <option value="unsimilar">Unique to One</option>
-                  <option value="unsimilar_from_one">Unsimilar from One</option>
-                </select>
+    input[type="file"] {
+      margin: 10px 0;
+    }
+  </style>
+</head>
+<body>
 
-                <button
-                  onClick={processData}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
-                >
-                  Compare Domains
-                </button>
-              </div>
-            </div>
+  <header>Backlink Comparison Tool</header>
 
-            {results.length > 0 && (
-              <div className="bg-white p-4 rounded shadow">
-                <h2 className="text-xl font-semibold mb-4">✅ Results</h2>
-                <div className="overflow-auto">
-                  <table className="table-auto w-full text-sm border">
-                    <thead>
-                      <tr className="bg-blue-100 text-blue-900">
-                        <th className="border px-2 py-1">Domain</th>
-                        {Array.from({ length: csvData.length + pastedData.trim() ? pastedData.split("\n")[0].split(/\t|,/).length : 0 }).map((_, i) => (
-                          <th key={i} className="border px-2 py-1">Website {i + 1}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {results.map((row, idx) => (
-                        <tr key={idx}>
-                          <td className="border px-2 py-1">{row.domain}</td>
-                          {row.presence.map((has, i) => (
-                            <td key={i} className="border px-2 py-1 text-center">{has ? "✔️" : ""}</td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
+  <div class="container">
+    <h2>Manual Backlink Input</h2>
+    <table id="input-table">
+      <thead>
+        <tr>
+          <th>Website 1</th>
+          <th>Website 2</th>
+          <th>Website 3</th>
+          <!-- Add more websites as needed -->
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><textarea id="site1"></textarea></td>
+          <td><textarea id="site2"></textarea></td>
+          <td><textarea id="site3"></textarea></td>
+        </tr>
+      </tbody>
+    </table>
 
-            <footer className="mt-10 text-center text-sm text-blue-700">
-              &copy; {new Date().getFullYear()} YourWebsite.com — All rights reserved.
-            </footer>
-          </div>
-        );
+    <h2>Or Upload CSV Files (one per brand)</h2>
+    <input type="file" id="csvUpload" multiple accept=".csv"><br><br>
+
+    <div class="filters">
+      <label><input type="radio" name="filter" value="similar" checked> Show Similar Domains</label>
+      <label><input type="radio" name="filter" value="unsimilar"> Show Unsimilar Domains Between Brands</label>
+      <label><input type="radio" name="filter" value="brand-unique"> Unsimilar Domains per Brand</label>
+    </div>
+
+    <button onclick="compareDomains()">Compare</button>
+
+    <div class="result-table" id="result"></div>
+  </div>
+
+  <footer>© 2025 Backlink Checker | Built for Fast Brand Comparison</footer>
+
+  <script>
+    function parseTextarea(id) {
+      return document.getElementById(id).value
+        .split(/\n|,/)
+        .map(x => x.trim())
+        .filter(x => x.length > 0);
+    }
+
+    function handleCSVUpload(callback) {
+      const input = document.getElementById('csvUpload');
+      const files = input.files;
+      const readers = [];
+
+      if (!files.length) {
+        callback([]);
+        return;
       }
 
-      ReactDOM.createRoot(document.getElementById("app")).render(<App />);
-    </script>
-  </body>
+      let results = [];
+      let filesProcessed = 0;
+
+      for (let i = 0; i < files.length; i++) {
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          const lines = e.target.result.split(/\r?\n/).map(x => x.trim()).filter(x => x);
+          results.push(lines);
+          filesProcessed++;
+          if (filesProcessed === files.length) callback(results);
+        };
+        reader.readAsText(files[i]);
+      }
+    }
+
+    function compareDomains() {
+      handleCSVUpload((csvData) => {
+        const brands = [
+          parseTextarea('site1'),
+          parseTextarea('site2'),
+          parseTextarea('site3'),
+          ...csvData
+        ];
+
+        const uniqueSets = brands.map(set =>
+          new Set(set.map(url => new URL(url).hostname).filter(Boolean))
+        );
+
+        const allDomains = Array.from(new Set(uniqueSets.flatMap(set => [...set])));
+        const mode = document.querySelector('input[name="filter"]:checked').value;
+
+        let resultHTML = '<table><tr><th>Domain</th>';
+
+        for (let i = 0; i < uniqueSets.length; i++) {
+          resultHTML += `<th>Website ${i + 1}</th>`;
+        }
+        resultHTML += '</tr>';
+
+        for (let domain of allDomains) {
+          const presence = uniqueSets.map(set => set.has(domain));
+          let show = false;
+
+          if (mode === 'similar') {
+            show = presence.every(v => v);
+          } else if (mode === 'unsimilar') {
+            const trueCount = presence.filter(Boolean).length;
+            show = trueCount >= 1 && trueCount < uniqueSets.length;
+          } else if (mode === 'brand-unique') {
+            const trueCount = presence.filter(Boolean).length;
+            show = trueCount === 1;
+          }
+
+          if (show) {
+            resultHTML += `<tr><td>${domain}</td>`;
+            presence.forEach(p => {
+              resultHTML += `<td style="text-align:center;">${p ? '✔️' : ''}</td>`;
+            });
+            resultHTML += '</tr>';
+          }
+        }
+
+        resultHTML += '</table>';
+        document.getElementById('result').innerHTML = resultHTML;
+      });
+    }
+  </script>
+
+</body>
 </html>
