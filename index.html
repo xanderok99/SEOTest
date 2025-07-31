@@ -1,140 +1,181 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Domain Comparison Tool</title>
-    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/tailwindcss-jit-cdn"></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            colors: {
-              primary: '#1E3A8A', // blue
-              secondary: '#60A5FA',
-            },
-          },
+import React, { useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
+import Papa from "papaparse";
+
+export default function Component() {
+  const [csvData, setCsvData] = useState<Record<string, Set<string>>>({});
+  const [manualInputs, setManualInputs] = useState<Record<string, string>>({});
+  const [filterType, setFilterType] = useState("similar");
+  const [filterResult, setFilterResult] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState("Website 1");
+  const [customNames, setCustomNames] = useState<string[]>([]);
+
+  const handleCsvUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files) return;
+
+    const newCsvData = { ...csvData };
+    const newCustomNames = [...customNames];
+
+    Array.from(files).forEach((file, index) => {
+      Papa.parse(file, {
+        complete: (result) => {
+          const urls = new Set(
+            result.data
+              .flat()
+              .map((url: any) => String(url).trim())
+              .filter(Boolean)
+          );
+          const label = `Website ${Object.keys(newCsvData).length + 1}`;
+          newCsvData[label] = urls;
+          newCustomNames.push(label);
+          setCsvData({ ...newCsvData });
+          setCustomNames([...newCustomNames]);
         },
-      };
-    </script>
-  </head>
-  <body class="bg-blue-50 text-gray-800">
-    <div class="max-w-7xl mx-auto py-8 px-4">
-      <h1 class="text-3xl font-bold text-primary mb-6">Domain Comparison Tool</h1>
+      });
+    });
+  };
 
-      <!-- Upload Section -->
-      <div class="mb-6 space-y-4">
-        <div>
-          <label class="block font-semibold text-primary mb-2">Upload CSVs for Websites</label>
-          <input id="csvFiles" type="file" multiple accept=".csv" class="file-input file-input-bordered file-input-primary w-full" />
-        </div>
+  const handleManualChange = (label: string, value: string) => {
+    const urls = new Set(
+      value
+        .split("\n")
+        .map((url) => url.trim())
+        .filter(Boolean)
+    );
+    setCsvData((prev) => ({ ...prev, [label]: urls }));
+    setManualInputs((prev) => ({ ...prev, [label]: value }));
+  };
 
-        <div>
-          <label class="block font-semibold text-primary mb-2">Or paste sheet-style data below:</label>
-          <textarea id="pastedData" rows="5" class="w-full textarea textarea-primary" placeholder="Paste domains in tabular format (e.g. copied from Excel)"></textarea>
-        </div>
+  const filterSimilarDomains = () => {
+    const allUrls = Object.values(csvData);
+    const intersection = allUrls.reduce((a, b) => {
+      return new Set([...a].filter((url) => b.has(url)));
+    });
+    setFilterResult([...intersection]);
+  };
 
-        <button onclick="handleDataInput()" class="btn btn-primary mt-2">Process Data</button>
-      </div>
+  const filterUnsimilarWithinBrand = (label: string) => {
+    const otherUrls = Object.entries(csvData)
+      .filter(([key]) => key !== label)
+      .flatMap(([_, urls]) => [...urls]);
+    const otherSet = new Set(otherUrls);
+    const unsimilar = [...(csvData[label] || [])].filter(
+      (url) => !otherSet.has(url)
+    );
+    setFilterResult(unsimilar);
+  };
 
-      <!-- Filters -->
-      <div class="my-6">
-        <label class="block font-semibold text-primary mb-2">Filter Options:</label>
-        <select id="filterType" class="select select-primary w-full max-w-md">
-          <option value="similar">Similar Domains on All Websites</option>
-          <option value="unsimilar">Domains Not Shared Across Any Website</option>
-          <option value="unsimilar_from_one">Domains Unique to One Website</option>
+  const filterAllUnsimilar = () => {
+    const allEntries = Object.entries(csvData);
+    const allUrls = allEntries.flatMap(([_, urls]) => [...urls]);
+    const urlCount: Record<string, number> = {};
+
+    allUrls.forEach((url) => {
+      urlCount[url] = (urlCount[url] || 0) + 1;
+    });
+
+    const uniqueUrls = Object.entries(urlCount)
+      .filter(([_, count]) => count === 1)
+      .map(([url]) => url);
+
+    setFilterResult(uniqueUrls);
+  };
+
+  const handleFilter = () => {
+    if (filterType === "similar") filterSimilarDomains();
+    else if (filterType === "unsimilar-all") filterAllUnsimilar();
+    else filterUnsimilarWithinBrand(filterType);
+  };
+
+  const brandTabs = Object.keys(csvData);
+
+  return (
+    <div className="p-6 space-y-8 text-sm">
+      <h2 className="text-xl font-bold text-blue-700">🔍 Backlink Domain Comparator</h2>
+
+      <Input
+        type="file"
+        multiple
+        accept=".csv"
+        onChange={handleCsvUpload}
+        className="mb-4"
+      />
+
+      <Tabs defaultValue={activeTab} value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="flex flex-wrap gap-2">
+          {brandTabs.map((label, index) => (
+            <TabsTrigger key={label} value={label}>
+              {customNames[index] || label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+
+        {brandTabs.map((label) => (
+          <TabsContent key={label} value={label}>
+            <Card>
+              <CardContent className="p-4 space-y-2">
+                <h3 className="font-semibold text-blue-600">Manual Table Input ({label})</h3>
+                <Textarea
+                  rows={6}
+                  value={manualInputs[label] || ""}
+                  onChange={(e) => handleManualChange(label, e.target.value)}
+                  placeholder="Paste full sheet (one column) or multiple URLs..."
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        ))}
+      </Tabs>
+
+      <div className="space-y-3">
+        <label className="block font-medium text-blue-800">🔧 Choose Filter</label>
+        <select
+          className="w-full border rounded p-2"
+          value={filterType}
+          onChange={(e) => setFilterType(e.target.value)}
+        >
+          <option value="similar">🔁 Similar Domains across all</option>
+          {brandTabs.map((label) => (
+            <option key={label} value={label}>
+              🚫 Unsimilar Domains on {label}
+            </option>
+          ))}
+          <option value="unsimilar-all">🚨 Unsimilar Domains across ALL Brands</option>
         </select>
+        <Button onClick={handleFilter}>Apply Filter</Button>
       </div>
 
-      <!-- Table Results -->
-      <div class="overflow-auto">
-        <table id="resultTable" class="table w-full table-zebra border border-blue-200">
-          <thead class="bg-blue-200 text-blue-900"></thead>
-          <tbody></tbody>
-        </table>
-      </div>
+      {filterResult.length > 0 && (
+        <div className="mt-6">
+          <h4 className="text-lg font-semibold text-blue-700 mb-2">🎯 Filter Results</h4>
+          <div className="overflow-auto">
+            <table className="min-w-full text-left border border-blue-200">
+              <thead className="bg-blue-100">
+                <tr>
+                  <th className="border px-4 py-2">Domain URL</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filterResult.map((url, i) => (
+                  <tr key={i}>
+                    <td className="border px-4 py-1 text-sm">{url}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <footer className="text-center text-xs text-blue-600 pt-10 border-t border-blue-100">
+        🔹 Built with ❤️ for backlink data comparison • v1.0
+      </footer>
     </div>
-
-    <!-- Footer -->
-    <footer class="bg-blue-100 mt-12 py-6 text-center text-sm text-primary">
-      &copy; 2025 YourWebsite.com — All rights reserved.
-    </footer>
-
-    <script>
-      let dataMatrix = [];
-      function handleDataInput() {
-        dataMatrix = []; // reset
-
-        const files = document.getElementById('csvFiles').files;
-        const pasted = document.getElementById('pastedData').value.trim();
-
-        if (files.length > 0) {
-          let fileReadCount = 0;
-          for (let i = 0; i < files.length; i++) {
-            Papa.parse(files[i], {
-              complete: (result) => {
-                const flatDomains = result.data.map(row => row[0]?.trim()).filter(Boolean);
-                dataMatrix[i] = flatDomains;
-                fileReadCount++;
-                if (fileReadCount === files.length) showFilteredData();
-              },
-            });
-          }
-        } else if (pasted) {
-          const lines = pasted.split('\n').filter(Boolean);
-          lines.forEach((line, i) => {
-            const cols = line.split(/\t|,/).map(col => col.trim());
-            cols.forEach((val, j) => {
-              if (!dataMatrix[j]) dataMatrix[j] = [];
-              if (val) dataMatrix[j].push(val);
-            });
-          });
-          showFilteredData();
-        } else {
-          alert('Please upload a CSV file or paste domain data.');
-        }
-      }
-
-      function showFilteredData() {
-        const filterType = document.getElementById('filterType').value;
-        const tableHead = document.querySelector('#resultTable thead');
-        const tableBody = document.querySelector('#resultTable tbody');
-
-        // Clear old
-        tableHead.innerHTML = '';
-        tableBody.innerHTML = '';
-
-        if (dataMatrix.length === 0) return;
-
-        const headers = dataMatrix.map((_, i) => `Website ${i + 1}`);
-        const domainSetPerBrand = dataMatrix.map(set => new Set(set));
-
-        const allDomains = [...new Set(dataMatrix.flat())];
-        let filtered = [];
-
-        if (filterType === 'similar') {
-          filtered = allDomains.filter(domain => domainSetPerBrand.every(set => set.has(domain)));
-        } else if (filterType === 'unsimilar') {
-          filtered = allDomains.filter(domain => domainSetPerBrand.filter(set => set.has(domain)).length === 1);
-        } else if (filterType === 'unsimilar_from_one') {
-          filtered = allDomains.filter(domain => domainSetPerBrand.some(set => set.has(domain)) && domainSetPerBrand.filter(set => set.has(domain)).length === 1);
-        }
-
-        // Add Header Row
-        const headerRow = `<tr><th>Domain</th>${headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
-        tableHead.innerHTML = headerRow;
-
-        // Add Filtered Results
-        filtered.forEach(domain => {
-          const row = [`<td>${domain}</td>`];
-          dataMatrix.forEach(set => {
-            row.push(`<td>${set.includes(domain) ? '✔️' : ''}</td>`);
-          });
-          tableBody.innerHTML += `<tr>${row.join('')}</tr>`;
-        });
-      }
-    </script>
-  </body>
-</html>
+  );
+}
