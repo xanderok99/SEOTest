@@ -2,186 +2,284 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Backlink Comparator</title>
+  <title>Backlink Comparison Tool</title>
   <style>
     body {
       font-family: Arial, sans-serif;
-      background-color: #f0f4ff;
-      padding: 20px;
-      color: #333;
+      background: #f8faff;
+      margin: 0;
+      padding: 0;
     }
-    h1 {
-      color: #004aad;
+
+    header {
+      background-color: #004c99;
+      color: white;
+      padding: 15px 30px;
       text-align: center;
+      font-size: 24px;
     }
-    .upload-section,
-    .manual-section,
-    .filter-section,
-    .result-section {
-      margin: 30px 0;
-      background: white;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+
+    .container {
+      padding: 30px;
+      max-width: 1200px;
+      margin: auto;
     }
-    textarea {
-      width: 100%;
-      height: 150px;
-      margin-bottom: 10px;
-    }
+
     table {
       width: 100%;
       border-collapse: collapse;
+      margin-bottom: 30px;
     }
+
     th, td {
       border: 1px solid #ccc;
-      padding: 8px;
-      text-align: left;
+      padding: 10px;
+      vertical-align: top;
     }
+
     th {
-      background-color: #0073e6;
-      color: white;
+      background-color: #e6f0ff;
     }
+
+    textarea {
+      width: 100%;
+      height: 150px;
+      resize: vertical;
+    }
+
+    .filters {
+      margin-bottom: 20px;
+    }
+
+    .filters label {
+      margin-right: 20px;
+    }
+
     button {
       background-color: #0073e6;
       color: white;
       padding: 10px 20px;
-      margin: 10px 5px;
       border: none;
-      border-radius: 5px;
       cursor: pointer;
+      border-radius: 5px;
+      margin-right: 10px;
     }
-    .brand-input {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
+
+    button:hover {
+      background-color: #005bb5;
     }
-    .brand-column {
-      flex: 1;
-      min-width: 200px;
-    }
+
     footer {
+      background-color: #004c99;
+      color: white;
       text-align: center;
-      margin-top: 50px;
-      font-size: 14px;
-      color: #888;
+      padding: 10px;
+    }
+
+    .result-table {
+      margin-top: 30px;
+    }
+
+    .result-table table {
+      border: 1px solid #ccc;
+    }
+
+    .result-table th {
+      background: #d9eaff;
+    }
+
+    input[type="file"] {
+      margin: 10px 0;
+    }
+
+    #uploaded-files {
+      margin-bottom: 15px;
+      font-style: italic;
+      color: #444;
     }
   </style>
 </head>
 <body>
-  <h1>Compare Backlinks Across Multiple Websites</h1>
 
-  <div class="upload-section">
-    <h2>1️⃣ Upload CSV Files</h2>
-    <label style="display:inline-block; background:#0073e6; color:white; padding:10px 20px; border-radius:5px; cursor:pointer;">
-      Upload CSV Files
-      <input type="file" id="csvUpload" multiple accept=".csv" style="display:none;">
-    </label>
-    <div id="fileNames"></div>
-  </div>
+  <header>Backlink Comparison Tool</header>
 
-  <div class="manual-section">
-    <h2>2️⃣ Manual Table Input</h2>
-    <div class="brand-input" id="brandInputs">
-      <div class="brand-column">
-        <label>Website 1</label>
-        <textarea placeholder="Paste backlinks here..."></textarea>
-      </div>
+  <div class="container">
+    <h2>Manual Backlink Input</h2>
+    <table id="input-table">
+      <thead id="input-head">
+        <tr>
+          <th>Website 1</th>
+          <th>Website 2</th>
+          <th>Website 3</th>
+        </tr>
+      </thead>
+      <tbody id="input-body">
+        <tr>
+          <td><textarea id="site1"></textarea></td>
+          <td><textarea id="site2"></textarea></td>
+          <td><textarea id="site3"></textarea></td>
+        </tr>
+      </tbody>
+    </table>
+    <button onclick="addWebsiteColumn()">+ Add Website Column</button>
+
+    <h2>Or Upload CSV Files (one per brand)</h2>
+    <input type="file" id="csvUpload" multiple accept=".csv"><br>
+    <div id="uploaded-files"></div>
+
+    <div class="filters">
+      <label><input type="radio" name="filter" value="similar" checked> Show Similar Domains</label>
+      <label><input type="radio" name="filter" value="unsimilar"> Show Unsimilar Domains Between Brands</label>
+      <label><input type="radio" name="filter" value="brand-unique"> Unsimilar Domains per Brand</label>
     </div>
-    <button onclick="addBrandColumn()">+ Add Website Column</button>
+
+    <button onclick="compareDomains()">Compare</button>
+    <button onclick="exportToCSV()">Export Results to CSV</button>
+
+    <div class="result-table" id="result"></div>
   </div>
 
-  <div class="filter-section">
-    <h2>3️⃣ Filter Options</h2>
-    <select id="filterOption">
-      <option value="similar">Similar domains on the same website</option>
-      <option value="unsimilar">Unsimilar domains on a brand</option>
-      <option value="unsimilarAll">Unsimilar domains across all websites</option>
-    </select>
-    <button onclick="filterData()">Apply Filter</button>
-  </div>
-
-  <div class="result-section">
-    <h2>🧾 Results</h2>
-    <table id="resultTable"></table>
-    <button onclick="exportToCSV()">Export to CSV</button>
-  </div>
-
-  <footer>
-    &copy; 2025 Backlink Comparator Tool | Built with 💙
-  </footer>
+  <footer>© 2025 Backlink Checker | Built for Fast Brand Comparison</footer>
 
   <script>
-    const brandInputs = document.getElementById('brandInputs');
-    const csvUpload = document.getElementById('csvUpload');
-    const fileNamesDiv = document.getElementById('fileNames');
+    let columnCount = 3;
 
-    csvUpload.addEventListener('change', function() {
-      const files = Array.from(csvUpload.files);
-      fileNamesDiv.innerHTML = files.map(f => `<div>📁 ${f.name}</div>`).join('');
-      // You can implement parsing logic here
-    });
+    function addWebsiteColumn() {
+      columnCount++;
+      const headRow = document.getElementById("input-head").rows[0];
+      const bodyRow = document.getElementById("input-body").rows[0];
 
-    function addBrandColumn() {
-      const count = brandInputs.children.length + 1;
-      const div = document.createElement('div');
-      div.classList.add('brand-column');
-      div.innerHTML = `<label>Website ${count}</label><textarea placeholder="Paste backlinks here..."></textarea>`;
-      brandInputs.appendChild(div);
+      const newTh = document.createElement("th");
+      newTh.textContent = `Website ${columnCount}`;
+      headRow.appendChild(newTh);
+
+      const newTd = document.createElement("td");
+      const newTextarea = document.createElement("textarea");
+      newTextarea.id = `site${columnCount}`;
+      newTd.appendChild(newTextarea);
+      bodyRow.appendChild(newTd);
     }
 
-    function filterData() {
-      const filter = document.getElementById('filterOption').value;
-      const resultTable = document.getElementById('resultTable');
-      const brandData = [...brandInputs.querySelectorAll('textarea')].map(t => t.value.split(/\n|,/).map(s => s.trim().toLowerCase()).filter(Boolean));
+    function parseTextarea(id) {
+      const value = document.getElementById(id);
+      if (!value) return [];
+      return value.value
+        .split(/\n|,/)
+        .map(x => x.trim())
+        .filter(x => x.length > 0);
+    }
 
-      const domainsPerBrand = brandData.map(arr => new Set(arr));
-      const allDomains = Array.from(new Set(domainsPerBrand.flatMap(set => [...set])));
+    function handleCSVUpload(callback) {
+      const input = document.getElementById('csvUpload');
+      const files = input.files;
+      const readers = [];
+      const fileNamesDiv = document.getElementById('uploaded-files');
+      fileNamesDiv.innerHTML = '';
 
-      let resultRows = [];
-
-      if (filter === 'similar') {
-        domainsPerBrand.forEach((set, idx) => {
-          const similar = [...set].filter(domain => [...set].filter(d => d === domain).length > 1);
-          if (similar.length) resultRows.push([`Website ${idx + 1}`, ...new Set(similar)]);
-        });
-      } else if (filter === 'unsimilar') {
-        domainsPerBrand.forEach((set, idx) => {
-          const others = new Set(allDomains.filter((_, i) => i !== idx));
-          const unsimilar = [...set].filter(domain => !others.has(domain));
-          if (unsimilar.length) resultRows.push([`Website ${idx + 1}`, ...unsimilar]);
-        });
-      } else if (filter === 'unsimilarAll') {
-        const shared = allDomains.filter(domain => domainsPerBrand.filter(set => set.has(domain)).length === 1);
-        resultRows = shared.map(domain => [domain]);
+      if (!files.length) {
+        callback([]);
+        return;
       }
 
-      resultTable.innerHTML = '';
-      if (resultRows.length) {
-        resultRows.forEach(row => {
-          const tr = document.createElement('tr');
-          row.forEach(cell => {
-            const td = document.createElement('td');
-            td.textContent = cell;
-            tr.appendChild(td);
-          });
-          resultTable.appendChild(tr);
-        });
-      } else {
-        resultTable.innerHTML = '<tr><td>No matching data found.</td></tr>';
+      let results = [];
+      let filesProcessed = 0;
+
+      for (let i = 0; i < files.length; i++) {
+        const reader = new FileReader();
+        const fileName = files[i].name;
+
+        const listItem = document.createElement('div');
+        listItem.textContent = `✔️ ${fileName}`;
+        fileNamesDiv.appendChild(listItem);
+
+        reader.onload = function (e) {
+          const lines = e.target.result.split(/\r?\n/).map(x => x.trim()).filter(x => x);
+          results.push(lines);
+          filesProcessed++;
+          if (filesProcessed === files.length) callback(results);
+        };
+        reader.readAsText(files[i]);
       }
+    }
+
+    function compareDomains() {
+      handleCSVUpload((csvData) => {
+        const brands = [];
+
+        for (let i = 1; i <= columnCount; i++) {
+          brands.push(parseTextarea(`site${i}`));
+        }
+
+        brands.push(...csvData);
+
+        const uniqueSets = brands.map(set =>
+          new Set(set.map(url => {
+            try {
+              return new URL(url).hostname;
+            } catch (e) {
+              return null;
+            }
+          }).filter(Boolean))
+        );
+
+        const allDomains = Array.from(new Set(uniqueSets.flatMap(set => [...set])));
+        const mode = document.querySelector('input[name="filter"]:checked').value;
+
+        let resultHTML = '<table><tr><th>Domain</th>';
+
+        for (let i = 0; i < uniqueSets.length; i++) {
+          resultHTML += `<th>Website ${i + 1}</th>`;
+        }
+        resultHTML += '</tr>';
+
+        for (let domain of allDomains) {
+          const presence = uniqueSets.map(set => set.has(domain));
+          let show = false;
+
+          if (mode === 'similar') {
+            show = presence.every(v => v);
+          } else if (mode === 'unsimilar') {
+            const trueCount = presence.filter(Boolean).length;
+            show = trueCount >= 1 && trueCount < uniqueSets.length;
+          } else if (mode === 'brand-unique') {
+            const trueCount = presence.filter(Boolean).length;
+            show = trueCount === 1;
+          }
+
+          if (show) {
+            resultHTML += `<tr><td>${domain}</td>`;
+            presence.forEach(p => {
+              resultHTML += `<td style="text-align:center;">${p ? '✔️' : ''}</td>`;
+            });
+            resultHTML += '</tr>';
+          }
+        }
+
+        resultHTML += '</table>';
+        document.getElementById('result').innerHTML = resultHTML;
+      });
     }
 
     function exportToCSV() {
-      const rows = document.querySelectorAll('#resultTable tr');
-      const csv = [...rows].map(row => [...row.children].map(td => `"${td.textContent}"`).join(',')).join('\n');
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = 'comparison_results.csv';
-      link.click();
+      const table = document.querySelector("#result table");
+      if (!table) return;
+
+      let csv = [];
+      for (let row of table.rows) {
+        const cells = Array.from(row.cells).map(cell => `"${cell.textContent}"`);
+        csv.push(cells.join(","));
+      }
+
+      const blob = new Blob([csv.join("\n")], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "comparison-results.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     }
   </script>
+
 </body>
 </html>
