@@ -141,145 +141,159 @@
 
   <footer>© 2025 Backlink Checker | Built for Fast Brand Comparison</footer>
 
-  <script>
-    let columnCount = 3;
+<script>
+  let columnCount = 3;
 
-    function addWebsiteColumn() {
-      columnCount++;
-      const headRow = document.getElementById("input-head").rows[0];
-      const bodyRow = document.getElementById("input-body").rows[0];
+  function addWebsiteColumn() {
+    columnCount++;
+    const headRow = document.getElementById("input-head").rows[0];
+    const bodyRow = document.getElementById("input-body").rows[0];
 
-      const newTh = document.createElement("th");
-      newTh.textContent = `Website ${columnCount}`;
-      headRow.appendChild(newTh);
+    const newTh = document.createElement("th");
+    newTh.textContent = `Website ${columnCount}`;
+    headRow.appendChild(newTh);
 
-      const newTd = document.createElement("td");
-      const newTextarea = document.createElement("textarea");
-      newTextarea.id = `site${columnCount}`;
-      newTd.appendChild(newTextarea);
-      bodyRow.appendChild(newTd);
+    const newTd = document.createElement("td");
+    const newTextarea = document.createElement("textarea");
+    newTextarea.id = `site${columnCount}`;
+    newTd.appendChild(newTextarea);
+    bodyRow.appendChild(newTd);
+  }
+
+  function parseTextarea(id) {
+    const value = document.getElementById(id);
+    if (!value) return [];
+    return value.value
+      .split(/\n|,/)
+      .map(x => x.trim())
+      .filter(x => x.length > 0);
+  }
+
+  function handleCSVUpload(callback) {
+    const input = document.getElementById('csvUpload');
+    const files = input.files;
+    const readers = [];
+    const fileNamesDiv = document.getElementById('uploaded-files');
+    fileNamesDiv.innerHTML = '';
+
+    if (!files.length) {
+      callback([]);
+      return;
     }
 
-    function parseTextarea(id) {
-      const value = document.getElementById(id);
-      if (!value) return [];
-      return value.value
-        .split(/\n|,/)
-        .map(x => x.trim())
-        .filter(x => x.length > 0);
+    let results = [];
+    let filesProcessed = 0;
+
+    for (let i = 0; i < files.length; i++) {
+      const reader = new FileReader();
+      const fileName = files[i].name;
+
+      const listItem = document.createElement('div');
+      listItem.textContent = `✔️ ${fileName}`;
+      fileNamesDiv.appendChild(listItem);
+
+      reader.onload = function (e) {
+        const lines = e.target.result.split(/\r?\n/).map(x => x.trim()).filter(x => x);
+        results.push(lines);
+        filesProcessed++;
+        if (filesProcessed === files.length) callback(results);
+      };
+      reader.readAsText(files[i]);
     }
+  }
 
-    function handleCSVUpload(callback) {
-      const input = document.getElementById('csvUpload');
-      const files = input.files;
-      const readers = [];
-      const fileNamesDiv = document.getElementById('uploaded-files');
-      fileNamesDiv.innerHTML = '';
+  function compareDomains() {
+    handleCSVUpload((csvData) => {
+      const brands = [];
 
-      if (!files.length) {
-        callback([]);
-        return;
+      for (let i = 1; i <= columnCount; i++) {
+        brands.push(parseTextarea(`site${i}`));
       }
 
-      let results = [];
-      let filesProcessed = 0;
+      brands.push(...csvData);
 
-      for (let i = 0; i < files.length; i++) {
-        const reader = new FileReader();
-        const fileName = files[i].name;
-
-        const listItem = document.createElement('div');
-        listItem.textContent = `✔️ ${fileName}`;
-        fileNamesDiv.appendChild(listItem);
-
-        reader.onload = function (e) {
-          const lines = e.target.result.split(/\r?\n/).map(x => x.trim()).filter(x => x);
-          results.push(lines);
-          filesProcessed++;
-          if (filesProcessed === files.length) callback(results);
-        };
-        reader.readAsText(files[i]);
-      }
-    }
-
-    function compareDomains() {
-      handleCSVUpload((csvData) => {
-        const brands = [];
-
-        for (let i = 1; i <= columnCount; i++) {
-          brands.push(parseTextarea(`site${i}`));
-        }
-
-        brands.push(...csvData);
-
-        const uniqueSets = brands.map(set =>
-          new Set(set.map(url => {
-            try {
-              return new URL(url).hostname;
-            } catch (e) {
-              return null;
-            }
-          }).filter(Boolean))
-        );
-
-        const allDomains = Array.from(new Set(uniqueSets.flatMap(set => [...set])));
-        const mode = document.querySelector('input[name="filter"]:checked').value;
-
-        let resultHTML = '<table><tr><th>Domain</th>';
-
-        for (let i = 0; i < uniqueSets.length; i++) {
-          resultHTML += `<th>Website ${i + 1}</th>`;
-        }
-        resultHTML += '</tr>';
-
-        for (let domain of allDomains) {
-          const presence = uniqueSets.map(set => set.has(domain));
-          let show = false;
-
-          if (mode === 'similar') {
-            show = presence.every(v => v);
-          } else if (mode === 'unsimilar') {
-            const trueCount = presence.filter(Boolean).length;
-            show = trueCount >= 1 && trueCount < uniqueSets.length;
-          } else if (mode === 'brand-unique') {
-            const trueCount = presence.filter(Boolean).length;
-            show = trueCount === 1;
+      const uniqueSets = brands.map(set =>
+        new Set(set.map(url => {
+          try {
+            return new URL(url).hostname;
+          } catch (e) {
+            return null;
           }
+        }).filter(Boolean))
+      );
 
-          if (show) {
-            resultHTML += `<tr><td>${domain}</td>`;
-            presence.forEach(p => {
-              resultHTML += `<td style="text-align:center;">${p ? '✔️' : ''}</td>`;
-            });
-            resultHTML += '</tr>';
+      const allDomainCounts = {};
+      const allDomains = [];
+
+      uniqueSets.forEach(set => {
+        set.forEach(domain => {
+          if (!allDomainCounts[domain]) {
+            allDomainCounts[domain] = 0;
+            allDomains.push(domain);
           }
-        }
-
-        resultHTML += '</table>';
-        document.getElementById('result').innerHTML = resultHTML;
+          allDomainCounts[domain]++;
+        });
       });
-    }
 
-    function exportToCSV() {
-      const table = document.querySelector("#result table");
-      if (!table) return;
+      const mode = document.querySelector('input[name="filter"]:checked').value;
 
-      let csv = [];
-      for (let row of table.rows) {
-        const cells = Array.from(row.cells).map(cell => `"${cell.textContent}"`);
-        csv.push(cells.join(","));
+      const filteredDomains = allDomains.filter(domain => {
+        const presence = uniqueSets.map(set => set.has(domain));
+        if (mode === 'similar') {
+          return presence.every(Boolean);
+        } else if (mode === 'unsimilar') {
+          const count = presence.filter(Boolean).length;
+          return count >= 1 && count < uniqueSets.length;
+        } else if (mode === 'brand-unique') {
+          const count = presence.filter(Boolean).length;
+          return count === 1;
+        }
+        return false;
+      });
+
+      // Sort domains by most frequent
+      filteredDomains.sort((a, b) => allDomainCounts[b] - allDomainCounts[a]);
+
+      let resultHTML = '<table><tr><th>Domain</th>';
+      for (let i = 0; i < uniqueSets.length; i++) {
+        resultHTML += `<th>Website ${i + 1}</th>`;
+      }
+      resultHTML += '</tr>';
+
+      for (let domain of filteredDomains) {
+        const presence = uniqueSets.map(set => set.has(domain));
+        resultHTML += `<tr><td>${domain}</td>`;
+        presence.forEach(p => {
+          resultHTML += `<td style="text-align:center;">${p ? '✔️' : ''}</td>`;
+        });
+        resultHTML += '</tr>';
       }
 
-      const blob = new Blob([csv.join("\n")], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "comparison-results.csv";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      resultHTML += '</table>';
+      document.getElementById('result').innerHTML = resultHTML;
+    });
+  }
+
+  function exportToCSV() {
+    const table = document.querySelector("#result table");
+    if (!table) return;
+
+    let csv = [];
+    for (let row of table.rows) {
+      const cells = Array.from(row.cells).map(cell => `"${cell.textContent}"`);
+      csv.push(cells.join(","));
     }
-  </script>
+
+    const blob = new Blob([csv.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "comparison-results.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+</script>
 
 </body>
 </html>
