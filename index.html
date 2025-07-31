@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Common Domain Sorter</title>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tldts@5.7.5/dist/index.umd.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    textarea { width: 100%; height: 150px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; }
+  </style>
+</head>
+<body>
+
+<h2>Common Domain Extractor</h2>
+
+<p>Paste CSV content (with headers like Tripadvisor, Expedia, Foratravel, Virtuoso, Hopper, B0arding) or upload a CSV:</p>
+
+<textarea id="csvInput" placeholder="Paste your CSV data here..."></textarea>
+<br><br>
+<input type="file" id="csvFile">
+<button onclick="processData()">Process</button>
+
+<div id="output"></div>
+
+<script>
+function extractRootDomain(url) {
+  try {
+    const result = tldts.parse(url);
+    return result.domain ? `${result.domain}.${result.publicSuffix}` : null;
+  } catch {
+    return null;
+  }
+}
+
+function processData() {
+  const csvInput = document.getElementById("csvInput").value.trim();
+  const fileInput = document.getElementById("csvFile").files[0];
+
+  if (fileInput) {
+    Papa.parse(fileInput, {
+      header: true,
+      complete: (results) => handleCSV(results.data)
+    });
+  } else if (csvInput) {
+    const results = Papa.parse(csvInput, { header: true });
+    handleCSV(results.data);
+  } else {
+    alert("Please paste CSV data or upload a CSV file.");
+  }
+}
+
+function handleCSV(data) {
+  const websites = ["Tripadvisor", "Expedia", "Foratravel", "Virtuoso", "Hopper", "B0arding"];
+  const domainMap = {};
+
+  data.forEach(row => {
+    websites.forEach(site => {
+      const url = row[site];
+      if (url) {
+        const domain = extractRootDomain(url);
+        if (domain) {
+          if (!domainMap[domain]) {
+            domainMap[domain] = { appearsIn: new Set(), urls: [] };
+          }
+          domainMap[domain].appearsIn.add(site);
+          domainMap[domain].urls.push(url);
+        }
+      }
+    });
+  });
+
+  const commonDomains = Object.entries(domainMap)
+    .filter(([_, v]) => v.appearsIn.size > 1)
+    .map(([domain, v]) => ({
+      domain,
+      appearsIn: Array.from(v.appearsIn).join(", "),
+      urls: v.urls.join(" | "),
+      count: v.appearsIn.size,
+      inBoarding: v.appearsIn.has("B0arding")
+    }))
+    .sort((a, b) => {
+      if (a.inBoarding !== b.inBoarding) return a.inBoarding - b.inBoarding;
+      return b.count - a.count;
+    });
+
+  displayTable(commonDomains);
+}
+
+function displayTable(data) {
+  const container = document.getElementById("output");
+  if (data.length === 0) {
+    container.innerHTML = "<p>No common root domains found.</p>";
+    return;
+  }
+
+  let html = `<p><strong>✅ Found ${data.length} common domains:</strong></p>`;
+  html += `<table><thead><tr><th>Root Domain</th><th>Where It Appears</th><th>Actual URLs</th></tr></thead><tbody>`;
+  data.forEach(row => {
+    html += `<tr>
+      <td>${row.domain}</td>
+      <td>${row.appearsIn}</td>
+      <td>${row.urls}</td>
+    </tr>`;
+  });
+  html += "</tbody></table>";
+
+  // CSV download
+  const csvContent = "data:text/csv;charset=utf-8,"
+    + ["Root Domain,Where It Appears,Actual URLs"]
+    .concat(data.map(d => `"${d.domain}","${d.appearsIn}","${d.urls.replace(/"/g, '""')}"`))
+    .join("\n");
+
+  html += `<br><a href="${encodeURI(csvContent)}" download="common_domains.csv">Download CSV</a>`;
+
+  container.innerHTML = html;
+}
+</script>
+
+</body>
+</html>
