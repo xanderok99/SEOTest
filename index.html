@@ -1,123 +1,239 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Common Domain Sorter</title>
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/tldts@5.7.5/dist/index.umd.min.js"></script>
-  <style>
-    body { font-family: Arial, sans-serif; padding: 20px; }
-    textarea { width: 100%; height: 150px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-    th, td { border: 1px solid #ccc; padding: 8px; }
-  </style>
-</head>
-<body>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Root Domain Checker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tldts@5.7.5/dist/index.umd.min.js"></script>
+  </head>
+  <body class="bg-gray-50">
+    <div id="app" class="p-6 max-w-7xl mx-auto"></div>
 
-<h2>Common Domain Extractor</h2>
+    <script type="text/babel">
+      const { useState } = React;
 
-<p>Paste CSV content (with headers like Tripadvisor, Expedia, Foratravel, Virtuoso, Hopper, B0arding) or upload a CSV:</p>
+      const defaultColumns = ["Column1", "Column2", "Column3", "Column4"];
 
-<textarea id="csvInput" placeholder="Paste your CSV data here..."></textarea>
-<br><br>
-<input type="file" id="csvFile">
-<button onclick="processData()">Process</button>
+      const App = () => {
+        const [data, setData] = useState([]);
+        const [columns, setColumns] = useState(defaultColumns);
+        const [manualTable, setManualTable] = useState(
+          Array(5).fill(Array(defaultColumns.length).fill(""))
+        );
+        const [filterCount, setFilterCount] = useState(2);
+        const [excludeBoarding, setExcludeBoarding] = useState(true);
+        const [results, setResults] = useState([]);
 
-<div id="output"></div>
-
-<script>
-function extractRootDomain(url) {
-  try {
-    const result = tldts.parse(url);
-    return result.domain ? `${result.domain}.${result.publicSuffix}` : null;
-  } catch {
-    return null;
-  }
-}
-
-function processData() {
-  const csvInput = document.getElementById("csvInput").value.trim();
-  const fileInput = document.getElementById("csvFile").files[0];
-
-  if (fileInput) {
-    Papa.parse(fileInput, {
-      header: true,
-      complete: (results) => handleCSV(results.data)
-    });
-  } else if (csvInput) {
-    const results = Papa.parse(csvInput, { header: true });
-    handleCSV(results.data);
-  } else {
-    alert("Please paste CSV data or upload a CSV file.");
-  }
-}
-
-function handleCSV(data) {
-  const websites = ["Tripadvisor", "Expedia", "Foratravel", "Virtuoso", "Hopper", "B0arding"];
-  const domainMap = {};
-
-  data.forEach(row => {
-    websites.forEach(site => {
-      const url = row[site];
-      if (url) {
-        const domain = extractRootDomain(url);
-        if (domain) {
-          if (!domainMap[domain]) {
-            domainMap[domain] = { appearsIn: new Set(), urls: [] };
+        const extractRootDomain = (url) => {
+          try {
+            const res = tldts.parse(url);
+            return res.domain ? `${res.domain}.${res.publicSuffix}` : null;
+          } catch {
+            return null;
           }
-          domainMap[domain].appearsIn.add(site);
-          domainMap[domain].urls.push(url);
-        }
-      }
-    });
-  });
+        };
 
-  const commonDomains = Object.entries(domainMap)
-    .filter(([_, v]) => v.appearsIn.size > 1)
-    .map(([domain, v]) => ({
-      domain,
-      appearsIn: Array.from(v.appearsIn).join(", "),
-      urls: v.urls.join(" | "),
-      count: v.appearsIn.size,
-      inBoarding: v.appearsIn.has("B0arding")
-    }))
-    .sort((a, b) => {
-      if (a.inBoarding !== b.inBoarding) return a.inBoarding - b.inBoarding;
-      return b.count - a.count;
-    });
+        const process = () => {
+          const rows = data.length ? data : manualTable;
+          const domainMap = {};
 
-  displayTable(commonDomains);
-}
+          rows.forEach((row) => {
+            columns.forEach((col, i) => {
+              const url = row[i] || "";
+              const domain = extractRootDomain(url);
+              if (domain) {
+                if (!domainMap[domain]) {
+                  domainMap[domain] = { appearsIn: new Set(), urls: [] };
+                }
+                domainMap[domain].appearsIn.add(col);
+                domainMap[domain].urls.push(url);
+              }
+            });
+          });
 
-function displayTable(data) {
-  const container = document.getElementById("output");
-  if (data.length === 0) {
-    container.innerHTML = "<p>No common root domains found.</p>";
-    return;
-  }
+          const filtered = Object.entries(domainMap)
+            .filter(([_, v]) => v.appearsIn.size >= filterCount)
+            .filter(([_, v]) =>
+              excludeBoarding ? !v.appearsIn.has("B0arding") : true
+            )
+            .map(([domain, v]) => ({
+              domain,
+              appearsIn: [...v.appearsIn].join(", "),
+              urls: v.urls.join(" | "),
+              count: v.appearsIn.size,
+            }))
+            .sort((a, b) => b.count - a.count);
 
-  let html = `<p><strong>✅ Found ${data.length} common domains:</strong></p>`;
-  html += `<table><thead><tr><th>Root Domain</th><th>Where It Appears</th><th>Actual URLs</th></tr></thead><tbody>`;
-  data.forEach(row => {
-    html += `<tr>
-      <td>${row.domain}</td>
-      <td>${row.appearsIn}</td>
-      <td>${row.urls}</td>
-    </tr>`;
-  });
-  html += "</tbody></table>";
+          setResults(filtered);
+        };
 
-  // CSV download
-  const csvContent = "data:text/csv;charset=utf-8,"
-    + ["Root Domain,Where It Appears,Actual URLs"]
-    .concat(data.map(d => `"${d.domain}","${d.appearsIn}","${d.urls.replace(/"/g, '""')}"`))
-    .join("\n");
+        const handleCSVUpload = (e) => {
+          const file = e.target.files[0];
+          if (file) {
+            Papa.parse(file, {
+              complete: (res) => {
+                const parsed = res.data.filter((row) => row.length > 0);
+                setData(parsed.slice(1)); // remove header
+                setColumns(parsed[0]);
+              },
+            });
+          }
+        };
 
-  html += `<br><a href="${encodeURI(csvContent)}" download="common_domains.csv">Download CSV</a>`;
+        const updateManual = (rowIdx, colIdx, val) => {
+          const newTable = [...manualTable];
+          newTable[rowIdx][colIdx] = val;
+          setManualTable(newTable);
+        };
 
-  container.innerHTML = html;
-}
-</script>
+        const exportCSV = () => {
+          const csv = [
+            ["Root Domain", "Appears In", "URLs"],
+            ...results.map((r) => [r.domain, r.appearsIn, r.urls]),
+          ]
+            .map((row) => row.map((v) => `"${v}"`).join(","))
+            .join("\n");
 
-</body>
+          const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.setAttribute("href", url);
+          link.setAttribute("download", "common_domains.csv");
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        };
+
+        return (
+          <div>
+            <h1 className="text-3xl font-bold mb-4">🌐 Common Domain Checker</h1>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="p-4 bg-white rounded shadow">
+                <h2 className="text-lg font-semibold mb-2">1️⃣ Upload CSV</h2>
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={handleCSVUpload}
+                  className="block border p-2 w-full"
+                />
+              </div>
+
+              <div className="p-4 bg-white rounded shadow">
+                <h2 className="text-lg font-semibold mb-2">2️⃣ Manual Table Input</h2>
+                <table className="table-auto w-full border text-sm">
+                  <thead>
+                    <tr>
+                      {columns.map((col, i) => (
+                        <th key={i} className="border px-2 py-1">
+                          <input
+                            value={col}
+                            onChange={(e) => {
+                              const newCols = [...columns];
+                              newCols[i] = e.target.value;
+                              setColumns(newCols);
+                            }}
+                            className="w-full border px-1"
+                          />
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {manualTable.map((row, rowIdx) => (
+                      <tr key={rowIdx}>
+                        {row.map((cell, colIdx) => (
+                          <td key={colIdx} className="border px-2 py-1">
+                            <input
+                              value={cell}
+                              onChange={(e) =>
+                                updateManual(rowIdx, colIdx, e.target.value)
+                              }
+                              className="w-full px-1"
+                            />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="mt-6 p-4 bg-white rounded shadow">
+              <h2 className="text-lg font-semibold mb-2">🔍 Filter Options</h2>
+              <div className="flex flex-col md:flex-row gap-4 items-start">
+                <label>
+                  Minimum # of appearances:
+                  <input
+                    type="number"
+                    value={filterCount}
+                    onChange={(e) => setFilterCount(Number(e.target.value))}
+                    className="border px-2 py-1 ml-2 w-20"
+                  />
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={excludeBoarding}
+                    onChange={() => setExcludeBoarding(!excludeBoarding)}
+                    className="mr-2"
+                  />
+                  Exclude “B0arding”
+                </label>
+                <button
+                  onClick={process}
+                  className="bg-blue-600 text-white px-4 py-2 rounded"
+                >
+                  Process
+                </button>
+              </div>
+            </div>
+
+            {results.length > 0 && (
+              <div className="mt-6 bg-white p-4 rounded shadow">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-xl font-semibold">
+                    ✅ Results: {results.length} domains
+                  </h2>
+                  <button
+                    onClick={exportCSV}
+                    className="bg-green-600 text-white px-4 py-2 rounded"
+                  >
+                    Download CSV
+                  </button>
+                </div>
+                <div className="overflow-auto mt-4">
+                  <table className="table-auto w-full text-sm border">
+                    <thead>
+                      <tr className="bg-gray-100">
+                        <th className="border px-2 py-1">Root Domain</th>
+                        <th className="border px-2 py-1">Appears In</th>
+                        <th className="border px-2 py-1">Actual URLs</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {results.map((r, i) => (
+                        <tr key={i}>
+                          <td className="border px-2 py-1">{r.domain}</td>
+                          <td className="border px-2 py-1">{r.appearsIn}</td>
+                          <td className="border px-2 py-1">{r.urls}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      };
+
+      ReactDOM.createRoot(document.getElementById("app")).render(<App />);
+    </script>
+  </body>
 </html>
