@@ -1,194 +1,140 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Backlink Domain Checker</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.development.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.development.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/tldts@5.7.5/dist/index.umd.min.js"></script>
-</head>
-<body class="bg-gray-100 text-gray-800">
-  <div id="app" class="p-6 max-w-7xl mx-auto"></div>
-  <script type="text/babel">
-    const { useState } = React;
-
-    const App = () => {
-      const [manualData, setManualData] = useState([Array(6).fill("")]);
-      const [csvData, setCsvData] = useState([]);
-      const [results, setResults] = useState([]);
-      const [filterType, setFilterType] = useState("common");
-      const [minCount, setMinCount] = useState(2);
-
-      const extractDomain = (url) => {
-        try {
-          const res = tldts.parse(url);
-          return res.domain ? `${res.domain}.${res.publicSuffix}` : null;
-        } catch {
-          return null;
-        }
-      };
-
-      const handleInput = (rIdx, cIdx, val) => {
-        const newData = [...manualData];
-        newData[rIdx][cIdx] = val;
-        if (rIdx === manualData.length - 1) newData.push(Array(newData[0].length).fill(""));
-        setManualData(newData);
-      };
-
-      const handleCSVUpload = (e) => {
-        const files = Array.from(e.target.files);
-        files.forEach((file, idx) => {
-          Papa.parse(file, {
-            complete: (res) => {
-              const parsed = res.data.filter((row) => row.length > 0);
-              const cleaned = parsed.slice(1).map(row => row.map(cell => cell.trim()));
-              const headers = parsed[0].map(h => h.trim());
-              const fullData = cleaned.map(r => headers.map((_, i) => r[i] || ""));
-              setCsvData(prev => [...prev, ...fullData]);
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Domain Comparison Tool</title>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.3.2/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tailwindcss-jit-cdn"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: '#1E3A8A', // blue
+              secondary: '#60A5FA',
             },
-            error: (err) => console.error("CSV Parse Error:", err)
-          });
-        });
+          },
+        },
       };
+    </script>
+  </head>
+  <body class="bg-blue-50 text-gray-800">
+    <div class="max-w-7xl mx-auto py-8 px-4">
+      <h1 class="text-3xl font-bold text-primary mb-6">Domain Comparison Tool</h1>
 
-      const process = () => {
-        const allData = [...csvData, ...manualData.slice(0, -1)];
-        const domainMap = {};
-
-        allData.forEach((row) => {
-          row.forEach((url, i) => {
-            if (!url) return;
-            const domain = extractDomain(url);
-            if (!domain) return;
-            if (!domainMap[domain]) domainMap[domain] = { appearsIn: new Set(), urls: [] };
-            domainMap[domain].appearsIn.add(`Website ${i + 1}`);
-            domainMap[domain].urls.push(url);
-          });
-        });
-
-        const filterFn = {
-          "common": ([_, v]) => v.appearsIn.size >= minCount,
-          "unique": ([_, v]) => v.appearsIn.size === 1,
-          "non-matching": ([_, v]) => !v.appearsIn.has(`Website 1`) && v.appearsIn.size >= 1
-        }[filterType];
-
-        const filtered = Object.entries(domainMap)
-          .filter(filterFn)
-          .map(([domain, v]) => ({
-            domain,
-            appearsIn: Array.from(v.appearsIn).join(", "),
-            urls: v.urls.join(" | "),
-            count: v.appearsIn.size
-          }))
-          .sort((a, b) => b.count - a.count);
-
-        setResults(filtered);
-      };
-
-      return (
-        <div className="space-y-8">
-          <header className="text-center">
-            <h1 className="text-4xl font-bold">🔎 Backlink Domain Checker</h1>
-            <p className="text-sm text-gray-600 mt-2">Paste your backlink data or upload multiple CSVs to compare</p>
-          </header>
-
-          <div className="bg-white p-4 rounded shadow">
-            <label className="block font-semibold mb-2">📁 Upload CSV Files:</label>
-            <input type="file" accept=".csv" multiple onChange={handleCSVUpload} className="w-full border px-3 py-2" />
-          </div>
-
-          <div className="overflow-auto">
-            <table className="table-auto border-collapse w-full">
-              <thead>
-                <tr>
-                  {manualData[0].map((_, idx) => (
-                    <th key={idx} className="border px-2 py-1 bg-gray-200 text-sm">Website {idx + 1}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {manualData.map((row, rowIdx) => (
-                  <tr key={rowIdx}>
-                    {row.map((cell, colIdx) => (
-                      <td key={colIdx} className="border px-1">
-                        <input
-                          className="w-full px-1 py-1 text-sm border"
-                          value={cell}
-                          onChange={(e) => handleInput(rowIdx, colIdx, e.target.value)}
-                        />
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="flex flex-col md:flex-row gap-4 items-start">
-            <label className="block">
-              Filter Type:
-              <select
-                className="ml-2 border px-2 py-1"
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
-              >
-                <option value="common">Similar Domains on Multiple Brands</option>
-                <option value="unique">Unsimilar Domains (Only One Brand)</option>
-                <option value="non-matching">Unsimilar from Website 1</option>
-              </select>
-            </label>
-
-            <label className="block">
-              Min Appearance:
-              <input
-                type="number"
-                className="ml-2 border px-2 py-1 w-20"
-                value={minCount}
-                onChange={(e) => setMinCount(Number(e.target.value))}
-              />
-            </label>
-
-            <button
-              onClick={process}
-              className="bg-blue-600 text-white px-4 py-2 rounded"
-            >
-              Run Filter
-            </button>
-          </div>
-
-          {results.length > 0 && (
-            <div className="bg-white p-4 rounded shadow">
-              <h2 className="text-xl font-semibold mb-4">✅ Results</h2>
-              <div className="overflow-auto">
-                <table className="table-auto w-full text-sm border">
-                  <thead>
-                    <tr className="bg-gray-100">
-                      <th className="border px-2 py-1">Root Domain</th>
-                      <th className="border px-2 py-1">Appears In</th>
-                      <th className="border px-2 py-1">Actual URLs</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {results.map((r, i) => (
-                      <tr key={i}>
-                        <td className="border px-2 py-1">{r.domain}</td>
-                        <td className="border px-2 py-1">{r.appearsIn}</td>
-                        <td className="border px-2 py-1">{r.urls}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+      <!-- Upload Section -->
+      <div class="mb-6 space-y-4">
+        <div>
+          <label class="block font-semibold text-primary mb-2">Upload CSVs for Websites</label>
+          <input id="csvFiles" type="file" multiple accept=".csv" class="file-input file-input-bordered file-input-primary w-full" />
         </div>
-      );
-    };
 
-    ReactDOM.createRoot(document.getElementById("app")).render(<App />);
-  </script>
-</body>
+        <div>
+          <label class="block font-semibold text-primary mb-2">Or paste sheet-style data below:</label>
+          <textarea id="pastedData" rows="5" class="w-full textarea textarea-primary" placeholder="Paste domains in tabular format (e.g. copied from Excel)"></textarea>
+        </div>
+
+        <button onclick="handleDataInput()" class="btn btn-primary mt-2">Process Data</button>
+      </div>
+
+      <!-- Filters -->
+      <div class="my-6">
+        <label class="block font-semibold text-primary mb-2">Filter Options:</label>
+        <select id="filterType" class="select select-primary w-full max-w-md">
+          <option value="similar">Similar Domains on All Websites</option>
+          <option value="unsimilar">Domains Not Shared Across Any Website</option>
+          <option value="unsimilar_from_one">Domains Unique to One Website</option>
+        </select>
+      </div>
+
+      <!-- Table Results -->
+      <div class="overflow-auto">
+        <table id="resultTable" class="table w-full table-zebra border border-blue-200">
+          <thead class="bg-blue-200 text-blue-900"></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-blue-100 mt-12 py-6 text-center text-sm text-primary">
+      &copy; 2025 YourWebsite.com — All rights reserved.
+    </footer>
+
+    <script>
+      let dataMatrix = [];
+      function handleDataInput() {
+        dataMatrix = []; // reset
+
+        const files = document.getElementById('csvFiles').files;
+        const pasted = document.getElementById('pastedData').value.trim();
+
+        if (files.length > 0) {
+          let fileReadCount = 0;
+          for (let i = 0; i < files.length; i++) {
+            Papa.parse(files[i], {
+              complete: (result) => {
+                const flatDomains = result.data.map(row => row[0]?.trim()).filter(Boolean);
+                dataMatrix[i] = flatDomains;
+                fileReadCount++;
+                if (fileReadCount === files.length) showFilteredData();
+              },
+            });
+          }
+        } else if (pasted) {
+          const lines = pasted.split('\n').filter(Boolean);
+          lines.forEach((line, i) => {
+            const cols = line.split(/\t|,/).map(col => col.trim());
+            cols.forEach((val, j) => {
+              if (!dataMatrix[j]) dataMatrix[j] = [];
+              if (val) dataMatrix[j].push(val);
+            });
+          });
+          showFilteredData();
+        } else {
+          alert('Please upload a CSV file or paste domain data.');
+        }
+      }
+
+      function showFilteredData() {
+        const filterType = document.getElementById('filterType').value;
+        const tableHead = document.querySelector('#resultTable thead');
+        const tableBody = document.querySelector('#resultTable tbody');
+
+        // Clear old
+        tableHead.innerHTML = '';
+        tableBody.innerHTML = '';
+
+        if (dataMatrix.length === 0) return;
+
+        const headers = dataMatrix.map((_, i) => `Website ${i + 1}`);
+        const domainSetPerBrand = dataMatrix.map(set => new Set(set));
+
+        const allDomains = [...new Set(dataMatrix.flat())];
+        let filtered = [];
+
+        if (filterType === 'similar') {
+          filtered = allDomains.filter(domain => domainSetPerBrand.every(set => set.has(domain)));
+        } else if (filterType === 'unsimilar') {
+          filtered = allDomains.filter(domain => domainSetPerBrand.filter(set => set.has(domain)).length === 1);
+        } else if (filterType === 'unsimilar_from_one') {
+          filtered = allDomains.filter(domain => domainSetPerBrand.some(set => set.has(domain)) && domainSetPerBrand.filter(set => set.has(domain)).length === 1);
+        }
+
+        // Add Header Row
+        const headerRow = `<tr><th>Domain</th>${headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
+        tableHead.innerHTML = headerRow;
+
+        // Add Filtered Results
+        filtered.forEach(domain => {
+          const row = [`<td>${domain}</td>`];
+          dataMatrix.forEach(set => {
+            row.push(`<td>${set.includes(domain) ? '✔️' : ''}</td>`);
+          });
+          tableBody.innerHTML += `<tr>${row.join('')}</tr>`;
+        });
+      }
+    </script>
+  </body>
 </html>
